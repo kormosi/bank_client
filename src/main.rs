@@ -1,8 +1,12 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io::{self, Write};
 use std::os::unix::net::UnixDatagram;
 use std::path::Path;
 use std::{fs, str};
+
+use anyhow::Result;
+use serde_json;
+use serde::{Serialize};
 
 fn print_instructions() {
     println!(
@@ -10,6 +14,35 @@ fn print_instructions() {
 t: perform transaction
 q: quit\n"
     );
+}
+
+#[derive(Serialize)]
+enum TxInfoValue {
+    Name(String),
+    Amount(u64),
+}
+
+fn get_tx_info() -> Result<HashMap<String, TxInfoValue>> {
+    let from = prompt_and_get_input("from")?;
+    let to = prompt_and_get_input("to")?;
+    let amount = prompt_and_get_input("amount")?;
+    let amount = amount.parse::<u64>()?;
+
+    let mut tx_info = HashMap::new();
+    tx_info.insert("from".to_string(), TxInfoValue::Name(from));
+    tx_info.insert("to".to_string(), TxInfoValue::Name(to));
+    tx_info.insert("amount".to_string(), TxInfoValue::Amount(amount));
+
+    Ok(tx_info)
+}
+
+fn prompt_and_get_input(prompt: &str) -> Result<String, io::Error> {
+    let mut from = String::new();
+    print!("{}: ", prompt);
+    io::stdout().flush()?;
+    io::stdin().read_line(&mut from)?;
+    let from = from.trim();
+    Ok(from.to_string())
 }
 
 fn get_valid_instruction_from_user() -> Result<String, io::Error> {
@@ -52,9 +85,17 @@ fn main() -> Result<(), io::Error> {
 
     loop {
         let instruction = get_valid_instruction_from_user()?;
-        if instruction == "q" {
-            println!("Quitting, bye!");
-            return Ok(());
+        match instruction.as_str() {
+            "q" => {
+                println!("Quitting, bye!");
+                return Ok(());
+            }
+            "t" => {
+                let tx_info = get_tx_info().unwrap();
+                let tx_info_serialized = serde_json::to_string(&tx_info).unwrap();
+                println!("{tx_info_serialized}");
+            }
+            _ => panic!("blabla"),
         }
 
         socket.send_to(instruction.as_bytes(), SOCK_DST)?;
