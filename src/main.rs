@@ -1,9 +1,8 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashSet};
 use std::io::{self, Write};
 use std::os::unix::net::UnixDatagram;
 use std::path::Path;
 use std::{fs, str};
-use log;
 
 use anyhow::Result;
 use serde::Serialize;
@@ -60,7 +59,7 @@ fn get_valid_instruction_from_user() -> Result<String, io::Error> {
     }
 }
 
-fn create_listener(socket_location: &str) -> io::Result<UnixDatagram> {
+fn create_socket(socket_location: &str) -> io::Result<UnixDatagram> {
     let socket_path = Path::new(socket_location);
     if socket_path.exists() {
         fs::remove_file(socket_path)?;
@@ -76,7 +75,7 @@ fn main() -> Result<()> {
     const SOCK_SRC: &str = "/tmp/client2server.sock";
     const SOCK_DST: &str = "/tmp/server2client.sock";
 
-    let socket = create_listener(SOCK_SRC)?;
+    let socket = create_socket(SOCK_SRC)?;
 
     print_instructions();
 
@@ -91,17 +90,18 @@ fn main() -> Result<()> {
                 // Get and send tx_info to socket
                 let tx_info = get_tx_info().unwrap();
                 let tx_info_serialized = serde_json::to_string(&tx_info).unwrap();
-                println!("tx_info: {tx_info_serialized}");
                 socket.send_to(instruction.as_bytes(), SOCK_DST)?;
                 // Receive and verify "handshake"
                 let mut response_buffer = vec![0; 3];
                 socket.recv(response_buffer.as_mut_slice())?;
                 let str_response = str::from_utf8(&response_buffer)?;
-                println!("OK response = {}", str_response);
                 if str_response.trim() == "200" {
-                    println!("got 200");
                     socket.send_to(tx_info_serialized.as_bytes(), SOCK_DST)?;
-                    println!("sent tx_info to server");
+
+                    let mut response_buffer = vec![0; 50];
+                    socket.recv(response_buffer.as_mut_slice())?;
+                    let str_response = str::from_utf8(&response_buffer)?.trim();
+                    println!("{str_response}");
                 }
             }
             "i" => {
